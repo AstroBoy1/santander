@@ -14,76 +14,84 @@ target = 'target'
 predictors = train_df.columns.values.tolist()[2:]
 NUM_FOLDS = 10
 bayesian_tr_index, bayesian_val_index = list(StratifiedKFold(n_splits=NUM_FOLDS, shuffle=True, random_state=1).split(train_df, train_df.target.values))[0]
-NUM_ROUNDS = 10000
+NUM_ROUNDS = 1000
 EARLY_STOPPING = 100
+init_points = 100
+n_iter = 100
 
 
 def LGB_bayesian(
         bagging_fraction,
         bagging_freq,
-        boosting,
-        device_type,
         drop_rate,
         feature_fraction,
-        gpu_device_id,
-        gpu_platform_id,
-        gpu_use_dp,
-        is_unbalance,
         lambda_l1,
         lambda_l2,
         learning_rate,
         max_bin,
-        max_delta,
         max_depth,
-        metric,
         min_data_in_leaf,
         min_gain_to_split,
         min_sum_hessian_in_leaf,
-        num_iterations,
         num_leaves,
-        num_threads,
-        objective,
-        save_binary,
-        skip_drop,
-        tree_learner,
-        uniform_drop,
-        verbosity):
+        skip_drop):
+    """
+    Used for bayesian optimization
+    :param bagging_fraction:
+    :param bagging_freq:
+    :param drop_rate:
+    :param feature_fraction:
+    :param lambda_l1:
+    :param lambda_l2:
+    :param learning_rate:
+    :param max_bin:
+    :param max_depth:
+    :param min_data_in_leaf:
+    :param min_gain_to_split:
+    :param min_sum_hessian_in_leaf:
+    :param num_leaves:
+    :param skip_drop:
+    :return:
+    """
 
     num_leaves = int(num_leaves)
     min_data_in_leaf = int(min_data_in_leaf)
     max_depth = int(max_depth)
     max_bin = int(max_bin)
-    num_threads = int(num_threads)
+    bagging_freq = int(bagging_freq)
 
     param = {
-        'num_leaves': num_leaves,
-        'max_bin': 119,
-        'min_data_in_leaf': min_data_in_leaf,
-        'learning_rate': learning_rate,
-        'min_sum_hessian_in_leaf': min_sum_hessian_in_leaf,
-        'bagging_fraction': 0.4,
-        'bagging_freq': 5,
+        'bagging_fraction': bagging_fraction,
+        'bagging_freq': bagging_freq,
+        'boosting': 'dart',
+        'device_type': 'gpu',
+        'drop_rate': drop_rate,
         'feature_fraction': feature_fraction,
+        'gpu_device_id': 0,
+        'gpu_platform_id': 0,
+        'gpu_use_dp': True,
+        'is_unbalance': True,
         'lambda_l1': lambda_l1,
         'lambda_l2': lambda_l2,
-        'min_gain_to_split': min_gain_to_split,
+        'learning_rate': learning_rate,
+        'max_bin': max_bin,
         'max_depth': max_depth,
+        'metric': 'auc',
+        'min_data_in_leaf': min_data_in_leaf,
+        'min_gain_to_split': min_gain_to_split,
+        'min_sum_hessian_in_leaf': min_sum_hessian_in_leaf,
+        'num_leaves': num_leaves,
+        'num_threads': 4,
+        'objective': 'binary',
         'save_binary': True,
+        'skip_drop': skip_drop,
+        'tree_learner': 'feature',
+        'verbosity': 1,
         'seed': 1337,
         'feature_fraction_seed': 1337,
         'bagging_seed': 1337,
         'drop_seed': 1337,
         'data_random_seed': 1337,
-        'objective': 'binary',
-        'boosting_type': 'gbdt',
-        'verbose': 1,
-        'metric': 'auc',
-        'is_unbalance': True,
-        'boost_from_average': False,
-        'device': 'gpu',
-        'gpu_platform_id': 0,
-        'gpu_device_id' : 0,
-        'boosting' : 'dart'
     }
 
     xg_train = lgb.Dataset(train_df.iloc[bayesian_tr_index][predictors].values,
@@ -107,23 +115,26 @@ def LGB_bayesian(
 
 # Bounded region of parameter space
 bounds_LGB = {
-    'num_leaves': (5, 100),
-    'min_data_in_leaf': (5, 100),
-    'learning_rate': (0.01, 0.3),
-    'min_sum_hessian_in_leaf': (0.00001, 0.01),
-    'feature_fraction': (0.05, 0.5),
-    'lambda_l1': (0, 5.0),
-    'lambda_l2': (0, 5.0),
-    'min_gain_to_split': (0, 1.0),
-    'max_depth':(3,15),
+    'bagging_fraction': (0.0, 1.0),
+    'bagging_freq': (0, 20),
+    'drop_rate': (0.0, 1.0),
+    'feature_fraction': (0.01, 1),
+    'lambda_l1': (0, 200),
+    'lambda_l2': (0, 200),
+    'learning_rate': (0.0025, 0.3),
+    'max_bin': (7, 1023),
+    'max_depth': (1, 100),
+    'metric': 'auc',
+    'min_data_in_leaf': (0, 200),
+    'min_gain_to_split': (0, 2.0),
+    'min_sum_hessian_in_leaf': (0, 150),
+    'num_leaves': (1, 100),
+    'skip_drop': (0.0, 1.0),
 }
 
 from bayes_opt import BayesianOptimization
 
 LGB_BO = BayesianOptimization(LGB_bayesian, bounds_LGB, random_state=13)
-
-init_points = 1000
-n_iter = 1000
 
 with warnings.catch_warnings():
     warnings.filterwarnings('ignore')
@@ -135,30 +146,37 @@ print(LGB_BO.max['target'])
 print(LGB_BO.max['params'])
 
 param_lgb = {
-        'num_leaves': int(LGB_BO.max['params']['num_leaves']), # remember to int here
-        'max_bin': int(LGB_BO.max['params']['num_leaves']),
-        'min_data_in_leaf': int(LGB_BO.max['params']['min_data_in_leaf']), # remember to int here
-        'learning_rate': LGB_BO.max['params']['learning_rate'],
-        'min_sum_hessian_in_leaf': LGB_BO.max['params']['min_sum_hessian_in_leaf'],
-        'bagging_fraction': 0.4,
-        'bagging_freq': 5,
-        'feature_fraction': LGB_BO.max['params']['feature_fraction'],
-        'lambda_l1': LGB_BO.max['params']['lambda_l1'],
-        'lambda_l2': LGB_BO.max['params']['lambda_l2'],
-        'min_gain_to_split': LGB_BO.max['params']['min_gain_to_split'],
-        'max_depth': int(LGB_BO.max['params']['max_depth']), # remember to int here
-        'save_binary': True,
-        'seed': 1337,
-        'feature_fraction_seed': 1337,
-        'bagging_seed': 1337,
-        'drop_seed': 1337,
-        'data_random_seed': 1337,
-        'objective': 'binary',
-        'boosting_type': 'gbdt',
-        'verbose': 1,
-        'metric': 'auc',
-        'is_unbalance': True,
-        'boost_from_average': False,
+    'bagging_fraction': LGB_BO.max['params']['bagging_fraction'],
+    'bagging_freq': int(LGB_BO.max['params']['bagging_freq']),
+    'boosting': 'dart',
+    'device_type': 'gpu',
+    'drop_rate': LGB_BO.max['params']['drop_rate'],
+    'feature_fraction': LGB_BO.max['params']['feature_fraction'],
+    'gpu_device_id': 0,
+    'gpu_platform_id': 0,
+    'gpu_use_dp': True,
+    'is_unbalance': True,
+    'lambda_l1': LGB_BO.max['params']['lambda_l1'],
+    'lambda_l2': LGB_BO.max['params']['lambda_l2'],
+    'learning_rate': LGB_BO.max['params']['learning_rate'],
+    'max_bin': int(LGB_BO.max['params']['max_bin']),
+    'max_depth': int(LGB_BO.max['params']['max_depth']),
+    'metric': 'auc',
+    'min_data_in_leaf': int(LGB_BO.max['params']['min_data_in_leaf']),
+    'min_gain_to_split': LGB_BO.max['params']['min_gain_to_split'],
+    'min_sum_hessian_in_leaf': LGB_BO.max['params']['min_sum_hessian_in_leaf'],
+    'num_leaves': int(LGB_BO.max['params']['num_leaves']),
+    'num_threads': 4,
+    'objective': 'binary',
+    'save_binary': True,
+    'skip_drop': LGB_BO.max['params']['skip_drop'],
+    'tree_learner': 'feature',
+    'verbosity': 1,
+    'seed': 1337,
+    'feature_fraction_seed': 1337,
+    'bagging_seed': 1337,
+    'drop_seed': 1337,
+    'data_random_seed': 1337,
     }
 
 nfold = 10
