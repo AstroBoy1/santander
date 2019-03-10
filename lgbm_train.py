@@ -28,7 +28,6 @@ def LGB_bayesian(
         lambda_l1,
         lambda_l2,
         learning_rate,
-        max_bin,
         max_depth,
         min_data_in_leaf,
         min_gain_to_split,
@@ -44,7 +43,6 @@ def LGB_bayesian(
     :param lambda_l1:
     :param lambda_l2:
     :param learning_rate:
-    :param max_bin:
     :param max_depth:
     :param min_data_in_leaf:
     :param min_gain_to_split:
@@ -57,7 +55,6 @@ def LGB_bayesian(
     num_leaves = int(num_leaves)
     min_data_in_leaf = int(min_data_in_leaf)
     max_depth = int(max_depth)
-    max_bin = int(max_bin)
     bagging_freq = int(bagging_freq)
 
     param = {
@@ -74,7 +71,7 @@ def LGB_bayesian(
         'lambda_l1': lambda_l1,
         'lambda_l2': lambda_l2,
         'learning_rate': learning_rate,
-        'max_bin': max_bin,
+        'max_bin': 255,
         'max_depth': max_depth,
         'metric': 'auc',
         'min_data_in_leaf': min_data_in_leaf,
@@ -115,16 +112,14 @@ def LGB_bayesian(
 
 # Bounded region of parameter space
 bounds_LGB = {
-    'bagging_fraction': (0.0, 1.0),
+    'bagging_fraction': (0.0, 0.99),
     'bagging_freq': (0, 20),
     'drop_rate': (0.0, 1.0),
-    'feature_fraction': (0.01, 1),
+    'feature_fraction': (0.01, 0.99),
     'lambda_l1': (0, 200),
     'lambda_l2': (0, 200),
     'learning_rate': (0.0025, 0.3),
-    'max_bin': (7, 1023),
     'max_depth': (1, 100),
-    'metric': 'auc',
     'min_data_in_leaf': (0, 200),
     'min_gain_to_split': (0, 2.0),
     'min_sum_hessian_in_leaf': (0, 150),
@@ -159,7 +154,6 @@ param_lgb = {
     'lambda_l1': LGB_BO.max['params']['lambda_l1'],
     'lambda_l2': LGB_BO.max['params']['lambda_l2'],
     'learning_rate': LGB_BO.max['params']['learning_rate'],
-    'max_bin': int(LGB_BO.max['params']['max_bin']),
     'max_depth': int(LGB_BO.max['params']['max_depth']),
     'metric': 'auc',
     'min_data_in_leaf': int(LGB_BO.max['params']['min_data_in_leaf']),
