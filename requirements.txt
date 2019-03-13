@@ -1,0 +1,4 @@
+pandas=0.24.1
+numpy=1.16.2
+scipy=1.1.0
+lightgbm=2.2.4
