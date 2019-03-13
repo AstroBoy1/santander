@@ -8,15 +8,20 @@ from keras.models import Sequential, Model
 from keras.layers import Dense, Input, Flatten, Dropout, BatchNormalization, GaussianNoise
 from keras import callbacks
 import keras.backend as K
+import pickle
+from keras import optimizers
 # LOAD DATA
 df_train = pd.read_csv('data/train.csv', index_col=0)
-num_samples = 10000
+num_samples = len(df_train)
+#num_samples = 10000
 df_train = df_train[:num_samples]
 y_train = df_train.pop('target')
 len_train = len(df_train)
 df_test = pd.read_csv('data/test.csv', index_col=0)
 df_all = pd.concat((df_train, df_test), sort=False)
 prev_cols = df_all.columns
+num_epochs = 1000
+patience_epochs = 50
 
 # PREPROCESS
 scaler = StandardScaler()
@@ -80,11 +85,15 @@ class Logger(callbacks.Callback):
 # MODEL DEF
 def _Model():
     inp = Input(shape=(200, 1))
-    d1 = Dense(16, activation='relu')(inp)
+    d1 = Dense(128, activation='relu')(inp)
+    d1 = Dropout(rate=0.5)(d1)
+    d1 = Dense(64, activation='relu')(d1)
+    d1 = Dropout(rate=0.5)(d1)
+    d1 = Dense(16, activation='relu')(d1)
     fl = Flatten()(d1)
     preds = Dense(1, activation='sigmoid')(fl)
     model = Model(inputs=inp, outputs=preds)
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer=optimizers.SGD(lr=0.01, momentum=0.9, nesterov=True), loss='binary_crossentropy', metrics=['accuracy'])
     return model
 
 
@@ -99,8 +108,8 @@ for train, valid in cv.split(df_train, y_train):
     X_valid = np.reshape(df_train.iloc[valid].values, (-1, 200, 1))
     y_valid = y_train.iloc[valid].values
     model = _Model()
-    logger = Logger(patience=10, out_path='./', out_fn='cv_{}.h5'.format(c))
-    model.fit(X_train, y_train_, validation_data=(X_valid, y_valid), epochs=100, verbose=2, batch_size=256,
+    logger = Logger(patience=patience_epochs, out_path='./', out_fn='cv_{}.h5'.format(c))
+    history = model.fit(X_train, y_train_, validation_data=(X_valid, y_valid), epochs=num_epochs, verbose=1, batch_size=256,
               callbacks=[logger])
     model.load_weights('cv_{}.h5'.format(c))
     X_test = np.reshape(df_test.values, (200000, 200, 1))
@@ -108,6 +117,9 @@ for train, valid in cv.split(df_train, y_train):
     oof_preds[valid] = model.predict(X_valid)
     preds.append(curr_preds)
     c += 1
+    history_fn = "history" + str(c)
+    with open(history_fn, 'wb') as fn:
+        pickle.dump(history.history, fn)
 auc = roc_auc_score(y_train, oof_preds)
 print("CV_AUC: {}".format(auc))
 
@@ -119,4 +131,4 @@ preds_final = np.mean(preds.T, axis=1)
 submission = pd.DataFrame()
 submission = pd.read_csv("data/sample_submission.csv")
 submission['target'] = preds_final
-submission.to_csv('submission20.csv', index=False)
+submission.to_csv('results/submission20.csv', index=False)
