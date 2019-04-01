@@ -18,6 +18,7 @@ from sklearn.metrics import roc_auc_score
 import joblib
 from scipy.stats import rankdata
 from sklearn.base import BaseEstimator, TransformerMixin
+import time
 
 """TODO: Quick time test cpu vs gpu"""
 
@@ -26,11 +27,11 @@ np.set_printoptions(suppress=True)
 warnings.simplefilter("ignore")
 
 n_classes = 2
-length = 1000
+length = 200000
 save_directory = 'results/'
 early_stopping_rounds = 10
 # How many times to sample the features
-num_subsets = 5
+num_subsets = 1
 # number of features to select from possibly
 number = list(range(100, 201))
 
@@ -58,11 +59,11 @@ lgb_params = {
     'min_data_in_leaf': 80,
     'min_sum_hessian_in_leaf': 10.0,
     'num_leaves': 13,
-    'num_threads': 8,
     'tree_learner': 'serial',
     'objective': 'binary',
     'verbosity': -1,
-    'num_iterations': 100000
+    'num_iterations': 100000,
+    'device': 'gpu'
 }
 
 xgb_params = {
@@ -92,7 +93,8 @@ catboost_params = {
     'task_type': "GPU",
     'random_seed': 432013,
     'od_type': "Iter",
-    'border_count': 128
+    'border_count': 128,
+    "use_best_model": True
 }
 
 cbp1 = {
@@ -100,7 +102,6 @@ cbp1 = {
     "thread_count": 4,
     "loss_function": 'Logloss',
     "eval_metric": 'AUC',
-    "random_seed": 56498323,
     "depth": 2,  # default 6
     "learning_rate": 0.04,
     "l2_leaf_reg": 2,  # default 3
@@ -108,7 +109,9 @@ cbp1 = {
     "use_best_model": True,
     "od_type": 'Iter',
     "od_wait": 250,
-    "nan_mode": "Min"
+    "nan_mode": "Min",
+    "use_best_model": True,
+    "task_type": "GPU"
 }
 
 cbp2 = {
@@ -119,7 +122,8 @@ cbp2 = {
     "iterations": 100000,
     "random_seed": 42,
     "od_type": "Iter",
-    "depth": 10
+    "depth": 10,
+    "use_best_model": True
 }
 
 cbp3 = {
@@ -134,7 +138,9 @@ cbp3 = {
     "task_type": "GPU",
     "random_seed": 432013,
     "od_type": "Iter",
-    "border_count": 128
+    "border_count": 128,
+    "use_best_model": True,
+    "task_type": "GPU"
 }
 
 cbp4 = {
@@ -147,15 +153,16 @@ cbp4 = {
     "random_seed": 432013,
     "od_type": "Iter",
     "depth": 5,
-    "border_count": 64
+    "border_count": 64,
+    "use_best_model": True
 }
 
 random_state = 432013
 lgbp1 = {
     'bagging_freq': 5, 'bagging_fraction': 0.335, 'boost_from_average': 'false', 'boost': 'gbdt',
     'feature_fraction': 0.041, 'learning_rate': 0.0083, 'max_depth': -1, 'metric': 'auc',
-    'min_data_in_leaf': 80, 'min_sum_hessian_in_leaf': 10.0, 'num_leaves': 13, 'num_threads': 4,
-    'tree_learner': 'serial', 'objective': 'binary', 'verbosity': 1, 'num_iterations': 100000
+    'min_data_in_leaf': 80, 'min_sum_hessian_in_leaf': 10.0, 'num_leaves': 13,
+    'tree_learner': 'serial', 'objective': 'binary', 'verbosity': 1, 'num_iterations': 100000, 'device': 'gpu'
 }
 
 lgbp2 = {
@@ -177,7 +184,8 @@ lgbp2 = {
     "bagging_seed": random_state,
     "verbosity": 1,
     "seed": random_state,
-    'num_iterations': 100000
+    'num_iterations': 100000,
+    'device': 'gpu'
 }
 
 lgbp3 = {'num_leaves': 31,
@@ -196,7 +204,9 @@ lgbp3 = {'num_leaves': 31,
          "verbosity": -1,
          "nthread": 4,
          "random_state": 2019,
-         'num_iterations': 100000}
+         'num_iterations': 100000,
+         'device': 'gpu'
+         }
 
 lgbp4 = {
     "objective": "binary",
@@ -217,7 +227,8 @@ lgbp4 = {
     "bagging_seed": random_state,
     "verbosity": 1,
     "seed": random_state,
-    'num_iterations': 100000
+    'num_iterations': 100000,
+    'device': 'gpu'
 }
 
 xgbp1 = {'objective': "binary:logistic",
@@ -226,7 +237,7 @@ xgbp1 = {'objective': "binary:logistic",
          'eta': 0.05,
          'gamma': 5,
          'subsample': 0.7,
-         'colsample_bytree': 0.7,
+         #'colsample_bytree': 0.7,
          'min_child_weight': 50,
          'colsample_bylevel': 0.7,
          'lambda': 1,
@@ -353,7 +364,7 @@ class WrapCB(CatBoostClassifier):
     def fit(self, X, y):
         X_tr, X_val, y_tr, y_val = train_test_split(X, y,
                                                     test_size=0.2,
-                                                    random_state=42, use_best_model=True)
+                                                    random_state=42)
         return super(WrapCB, self).fit(X_tr, y_tr,
                                        early_stopping_rounds=early_stopping_rounds,
                                        eval_set=[(X_val, y_val)], verbose=1)
@@ -450,19 +461,21 @@ steps = [('stack1', stack1),
 # Init Pipeline
 pipe = Pipeline(steps)
 
+start = time.time()
 # Fit
 pipe = pipe.fit(X_train, y_train)
+end = time.time()
 
 y_pred = pipe.predict_proba(X_test)
 
 # Final prediction score
 # print('Final prediction score: %.8f' % log_loss(y_test, y_pred))
 y_pred_final = [elem[1] for elem in y_pred]
-roc_auc_score(y_test, y_pred_final)
+print("validation score", roc_auc_score(y_test, y_pred_final))
 
 y_pred = pipe.predict_proba(train_data_x)
 y_pred_final = [elem[1] for elem in y_pred]
-roc_auc_score(train_data_y, y_pred_final)
+print("training score", roc_auc_score(train_data_y, y_pred_final))
 
 # Save Pipeline
 _ = joblib.dump(pipe, save_directory + 'pipe_with_stack.pkl')
@@ -476,3 +489,6 @@ output_df["ID_code"] = test_data_df["ID_code"]
 pred_final = [elem[1] for elem in kaggle_pred]
 output_df["target"] = pred_final
 output_df.to_csv(save_directory + "predictions.csv", index=False)
+
+print("Finished in ", (round(end - start)), " second")
+
