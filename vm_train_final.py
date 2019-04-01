@@ -3,8 +3,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 from vecstack import StackingTransformer
 import pandas as pd
-np.random.seed(0)
-np.set_printoptions(suppress=True)
 # Models
 from sklearn.naive_bayes import GaussianNB
 from xgboost import XGBClassifier
@@ -12,9 +10,7 @@ from lightgbm import LGBMClassifier
 # Stacking
 from catboost import CatBoostClassifier
 from sklearn.preprocessing import OneHotEncoder
-from keras.wrappers.scikit_learn import KerasClassifier
 import warnings
-warnings.simplefilter("ignore")
 from mlxtend.feature_selection import ColumnSelector
 from sklearn.pipeline import make_pipeline
 import random
@@ -23,21 +19,30 @@ import joblib
 from scipy.stats import rankdata
 from sklearn.base import BaseEstimator, TransformerMixin
 
-train_fn = '/content/gdrive/My Drive/santander_data/train.csv'
-valid_fn = '/content/gdrive/My Drive/santander_data/test.csv'
-pred_fn = '/content/gdrive/My Drive/santander_data/submission.csv'
+"""TODO: Quick time test cpu vs gpu"""
+
+np.random.seed(0)
+np.set_printoptions(suppress=True)
+warnings.simplefilter("ignore")
+
+n_classes = 2
+length = 1000
+save_directory = 'results/'
+early_stopping_rounds = 10
+# How many times to sample the features
+num_subsets = 5
+# number of features to select from possibly
+number = list(range(100, 201))
+
+train_fn = 'data/train.csv'
+valid_fn = 'data/test.csv'
+pred_fn = 'data/submission.csv'
 train_data_df = pd.read_csv(train_fn)
 test_data_df = pd.read_csv(valid_fn)
 train_data_x = train_data_df.drop(columns=["ID_code", "target"]).values
 train_data_y = train_data_df["target"].values
 test_data_x = test_data_df.drop(columns=["ID_code"]).values
 
-n_classes = 2
-length = 1000
-save_directory = '/content/gdrive/My Drive/santander_results/'
-early_stopping_rounds = 10
-# How many times to sample the features
-num_subsets = 5
 X, y = train_data_x[:length], train_data_y[:length]
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
 
@@ -146,7 +151,6 @@ cbp4 = {
 }
 
 random_state = 432013
-# https://www.kaggle.com/marcospcsj/kernel-cod-valid-cruzada-lgbm
 lgbp1 = {
     'bagging_freq': 5, 'bagging_fraction': 0.335, 'boost_from_average': 'false', 'boost': 'gbdt',
     'feature_fraction': 0.041, 'learning_rate': 0.0083, 'max_depth': -1, 'metric': 'auc',
@@ -154,7 +158,6 @@ lgbp1 = {
     'tree_learner': 'serial', 'objective': 'binary', 'verbosity': 1, 'num_iterations': 100000
 }
 
-# https://www.kaggle.com/bejeweled/stats-features-lgbm
 lgbp2 = {
     "objective": "binary",
     "metric": "auc",
@@ -177,7 +180,6 @@ lgbp2 = {
     'num_iterations': 100000
 }
 
-# https://www.kaggle.com/sandan0o0/lgb-regression
 lgbp3 = {'num_leaves': 31,
          'min_data_in_leaf': 30,
          'objective': 'binary',
@@ -196,7 +198,6 @@ lgbp3 = {'num_leaves': 31,
          "random_state": 2019,
          'num_iterations': 100000}
 
-# https://www.kaggle.com/jiweiliu/lgb-2-leaves-augment
 lgbp4 = {
     "objective": "binary",
     "metric": "auc",
@@ -219,7 +220,6 @@ lgbp4 = {
     'num_iterations': 100000
 }
 
-# https://www.kaggle.com/indranilbhattacharya/santander-xgb-lgb-starter
 xgbp1 = {'objective': "binary:logistic",
          'eval_metric': "auc",
          'max_depth': 4,
@@ -237,7 +237,6 @@ xgbp1 = {'objective': "binary:logistic",
 
          }
 
-# https://www.kaggle.com/marcospcsj/simple-xgboost-test
 xgbp2 = {'max_depth': 3,
          'silent': 1,
          'eval_metric': 'auc',
@@ -249,7 +248,6 @@ xgbp2 = {'max_depth': 3,
 
          }
 
-# https://www.kaggle.com/bogorodvo/starter-code-saving-and-loading-lgb-xgb-cb
 xgbp3 = {'max_depth': 2, 'eval_metric': 'auc',
          'n_estimators': 999999,
          'colsample_bytree': 0.3,
@@ -258,7 +256,6 @@ xgbp3 = {'max_depth': 2, 'eval_metric': 'auc',
          'n_jobs': -1
          }
 
-# https://www.kaggle.com/silverstone1903/xgboost-baseline
 xgbp4 = {'tree_method': 'hist',
          'objective': 'binary:logistic',
          'eval_metric': 'auc',
@@ -295,19 +292,19 @@ cbp_list.append(cbp4)
 cbp_list.append(catboost_params)
 
 
-def auc(y_true, y_pred):
+def auc(y_true, y_prediction):
     """ROC AUC metric for both binary and multiclass classification.
 
     Parameters
     ----------
     y_true : 1d numpy array
         True class labels
-    y_pred : 2d numpy array
+    y_prediction : 2d numpy array
         Predicted probabilities for each class
     """
     ohe = OneHotEncoder(sparse=False)
     y_true = ohe.fit_transform(y_true.reshape(-1, 1))
-    auc_score = roc_auc_score(y_true, y_pred)
+    auc_score = roc_auc_score(y_true, y_prediction)
     return auc_score
 
 
@@ -326,8 +323,8 @@ class WrapLGB(LGBMClassifier):
                                         eval_metric='auc', verbose=1)
 
     def predict(self, X):
-        return super(WrapLGB, self).predict(X,
-                                            num_iteration=self.best_iteration_)
+        return super(WrapLGB, self).predict_proba(X,
+                                                  num_iteration=self.best_iteration_)
 
 
 class WrapXGB(XGBClassifier):
@@ -342,11 +339,10 @@ class WrapXGB(XGBClassifier):
         return super(WrapXGB, self).fit(X_tr, y_tr,
                                         early_stopping_rounds=early_stopping_rounds,
                                         eval_set=[(X_val, y_val)],
-                                        eval_metric='auc', verbose=1)
+                                        eval_metric='auc', verbose=True)
 
     def predict(self, X):
-        return super(WrapXGB, self).predict(X,
-                                            num_iteration=self.best_iteration_)
+        return super(WrapXGB, self).predict_proba(X, ntree_limit=super(WrapXGB, self).best_ntree_limit)
 
 
 class WrapCB(CatBoostClassifier):
@@ -357,14 +353,13 @@ class WrapCB(CatBoostClassifier):
     def fit(self, X, y):
         X_tr, X_val, y_tr, y_val = train_test_split(X, y,
                                                     test_size=0.2,
-                                                    random_state=42)
+                                                    random_state=42, use_best_model=True)
         return super(WrapCB, self).fit(X_tr, y_tr,
                                        early_stopping_rounds=early_stopping_rounds,
                                        eval_set=[(X_val, y_val)], verbose=1)
 
     def predict(self, X):
-        return super(WrapCB, self).predict(X,
-                                           num_iteration=self.best_iteration_)
+        return super(WrapCB, self).predict_proba(X)
 
 # Specify steps of Pipeline
 
@@ -375,7 +370,6 @@ class WrapCB(CatBoostClassifier):
 
 subsets = []
 features = list(range(200))
-number = list(range(1, 201))
 pipe_models_1 = []
 for num in range(num_subsets):
     num_features = np.random.choice(number, size=1)[0]
@@ -387,7 +381,6 @@ for num in range(num_subsets):
     print("xgb params random chosen: ", xgb_params_rand)
     print("lgb params random chosen: ", lgb_params_rand)
     print("catboost params random chosen: ", catboost_params_rand)
-
     cl1 = ('gnb' + str(num), make_pipeline(ColumnSelector(cols=tuple(subset)), GaussianNB()))
     cl2 = ('xgb' + str(num), make_pipeline(ColumnSelector(cols=tuple(subset)), WrapXGB(**xgb_params_rand)))
     cl3 = ('lgbm' + str(num), make_pipeline(ColumnSelector(cols=tuple(subset)), WrapLGB(**lgb_params_rand)))
