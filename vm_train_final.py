@@ -3,11 +3,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 from vecstack import StackingTransformer
 import pandas as pd
-# Models
 from sklearn.naive_bayes import GaussianNB
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
-# Stacking
 from catboost import CatBoostClassifier
 from sklearn.preprocessing import OneHotEncoder
 import warnings
@@ -20,16 +18,14 @@ from scipy.stats import rankdata
 from sklearn.base import BaseEstimator, TransformerMixin
 import time
 
-"""TODO: Quick time test cpu vs gpu"""
-
 np.random.seed(0)
 np.set_printoptions(suppress=True)
 warnings.simplefilter("ignore")
 
 n_classes = 2
-length = 200000
+length = 10000
 save_directory = 'results/'
-early_stopping_rounds = 10
+early_stopping_rounds = 1000
 # How many times to sample the features
 num_subsets = 1
 # number of features to select from possibly
@@ -63,20 +59,20 @@ lgb_params = {
     'objective': 'binary',
     'verbosity': -1,
     'num_iterations': 100000,
-    'device': 'gpu'
+#    'device': 'gpu'
 }
 
 xgb_params = {
     'tree_method': 'hist',
     'objective': 'binary:logistic',
     'eval_metric': 'auc',
-    'learning_rate': 0.0936165921314771,
+    'learning_rate': 0.01,
     'max_depth': 2,
     'colsample_bytree': 0.3561271102144279,
     'subsample': 0.8246604621518232,
     'min_child_weight': 53,
     'gamma': 9.943467991283027,
-    'silent': 1,
+    #'silent': 1,
     'n_estimators': 999999
 }
 
@@ -86,11 +82,11 @@ catboost_params = {
     'random_strength': 0,
     'max_depth': 3,
     'eval_metric': "AUC",
-    'learning_rate': 0.02,
+    'learning_rate': 0.01,
     'iterations': 100000,
     'bootstrap_type': 'Bernoulli',
     'l2_leaf_reg': 0.3,
-    'task_type': "GPU",
+ #   'task_type': "GPU",
     'random_seed': 432013,
     'od_type': "Iter",
     'border_count': 128,
@@ -103,21 +99,21 @@ cbp1 = {
     "loss_function": 'Logloss',
     "eval_metric": 'AUC',
     "depth": 2,  # default 6
-    "learning_rate": 0.04,
+    "learning_rate": 0.01,
     "l2_leaf_reg": 2,  # default 3
     "verbose": 1,
     "use_best_model": True,
     "od_type": 'Iter',
     "od_wait": 250,
-    "nan_mode": "Min",
+    #"nan_mode": "Min",
     "use_best_model": True,
-    "task_type": "GPU"
+  #  "task_type": "GPU"
 }
 
 cbp2 = {
     "loss_function": "Logloss",
     "eval_metric": 'AUC',
-    "task_type": "GPU",
+   # "task_type": "GPU",
     "learning_rate": 0.01,
     "iterations": 100000,
     "random_seed": 42,
@@ -131,22 +127,22 @@ cbp3 = {
     "random_strength": 0,
     "max_depth": 3,
     "loss_function": 'Logloss',
-    "eval_metric": 'AUC', "learning_rate": 0.02,
+    "eval_metric": 'AUC', "learning_rate": 0.01,
     "iterations": 100000,
     "bootstrap_type": 'Bernoulli',
     "l2_leaf_reg": 0.3,
-    "task_type": "GPU",
+    #"task_type": "GPU",
     "random_seed": 432013,
     "od_type": "Iter",
     "border_count": 128,
     "use_best_model": True,
-    "task_type": "GPU"
+    #"task_type": "GPU"
 }
 
 cbp4 = {
     "loss_function": "Logloss",
     "eval_metric": "AUC",
-    "task_type": "GPU",
+    #"task_type": "GPU",
     "learning_rate": 0.01,
     "iterations": 100000,
     "l2_leaf_reg": 50,
@@ -162,7 +158,8 @@ lgbp1 = {
     'bagging_freq': 5, 'bagging_fraction': 0.335, 'boost_from_average': 'false', 'boost': 'gbdt',
     'feature_fraction': 0.041, 'learning_rate': 0.0083, 'max_depth': -1, 'metric': 'auc',
     'min_data_in_leaf': 80, 'min_sum_hessian_in_leaf': 10.0, 'num_leaves': 13,
-    'tree_learner': 'serial', 'objective': 'binary', 'verbosity': 1, 'num_iterations': 100000, 'device': 'gpu'
+    'tree_learner': 'serial', 'objective': 'binary', 'verbosity': 1, 'num_iterations': 100000,
+    #'device': 'gpu'
 }
 
 lgbp2 = {
@@ -185,14 +182,14 @@ lgbp2 = {
     "verbosity": 1,
     "seed": random_state,
     'num_iterations': 100000,
-    'device': 'gpu'
+    #'device': 'gpu'
 }
 
 lgbp3 = {'num_leaves': 31,
          'min_data_in_leaf': 30,
          'objective': 'binary',
          'max_depth': -1,
-         'learning_rate': 0.05,
+         'learning_rate': 0.01,
          "min_child_samples": 20,
          "boosting": "gbdt",
          "feature_fraction": 0.9,
@@ -205,7 +202,7 @@ lgbp3 = {'num_leaves': 31,
          "nthread": 4,
          "random_state": 2019,
          'num_iterations': 100000,
-         'device': 'gpu'
+     #    'device': 'gpu'
          }
 
 lgbp4 = {
@@ -228,13 +225,13 @@ lgbp4 = {
     "verbosity": 1,
     "seed": random_state,
     'num_iterations': 100000,
-    'device': 'gpu'
+   # 'device': 'gpu'
 }
 
 xgbp1 = {'objective': "binary:logistic",
          'eval_metric': "auc",
          'max_depth': 4,
-         'eta': 0.05,
+         'eta': 0.01,
          'gamma': 5,
          'subsample': 0.7,
          #'colsample_bytree': 0.7,
@@ -243,40 +240,38 @@ xgbp1 = {'objective': "binary:logistic",
          'lambda': 1,
          'alpha': 0,
          'booster': "gbtree",
-         'silent': 0,
+         #'silent': 0,
          'n_estimators': 999999
-
          }
 
 xgbp2 = {'max_depth': 3,
-         'silent': 1,
+         #'silent': 1,
          'eval_metric': 'auc',
-         'eta': 0.28071497637474263,  # learning rate
+         'eta': 0.01,
          'gamma': 0,
          'min_child_weight': 0.2784483175645849,
          'objective': 'binary:logistic',
          'n_estimators': 999999
-
          }
 
 xgbp3 = {'max_depth': 2, 'eval_metric': 'auc',
          'n_estimators': 999999,
          'colsample_bytree': 0.3,
-         'learning_rate': 0.02,
+         'learning_rate': 0.01,
          'objective': 'binary:logistic',
-         'n_jobs': -1
+         #'n_jobs': -1
          }
 
 xgbp4 = {'tree_method': 'hist',
          'objective': 'binary:logistic',
          'eval_metric': 'auc',
-         'learning_rate': 0.0936165921314771,
+         'learning_rate': 0.01,
          'max_depth': 2,
          'colsample_bytree': 0.3561271102144279,
          'subsample': 0.8246604621518232,
          'min_child_weight': 53,
          'gamma': 9.943467991283027,
-         'silent': 1,
+         #'silent': 1,
          'n_estimators': 999999
          }
 
@@ -377,18 +372,24 @@ class WrapCB(CatBoostClassifier):
 # Same paramaters to models, but different subfeatures by:
 # 1. Select a random number for the number of features to select
 # 2. Randomly select that many features
+# No need to do this manually because there are params for this
 
-
-subsets = []
+#subsets = []
 features = list(range(200))
+subset = features
 pipe_models_1 = []
-for num in range(num_subsets):
-    num_features = np.random.choice(number, size=1)[0]
-    subset = np.random.choice(features, size=num_features, replace=False, p=None)
-    subsets.append(subset)
-    xgb_params_rand = random.choice(xgbp_list)
-    lgb_params_rand = random.choice(lgbp_list)
-    catboost_params_rand = random.choice(cbp_list)
+#for num in range(num_subsets):
+for num in range(5):
+    #num_features = np.random.choice(number, size=1)[0]
+    #subset = np.random.choice(features, size=num_features, replace=False, p=None)
+    #subset = features
+    #subsets.append(subset)
+    #xgb_params_rand = random.choice(xgbp_list)
+    #lgb_params_rand = random.choice(lgbp_list)
+    #catboost_params_rand = random.choice(cbp_list)
+    xgb_params_rand = xgbp_list[num]
+    lgb_params_rand = lgbp_list[num]
+    catboost_params_rand = cbp_list[num]
     print("xgb params random chosen: ", xgb_params_rand)
     print("lgb params random chosen: ", lgb_params_rand)
     print("catboost params random chosen: ", catboost_params_rand)
@@ -396,13 +397,14 @@ for num in range(num_subsets):
     cl2 = ('xgb' + str(num), make_pipeline(ColumnSelector(cols=tuple(subset)), WrapXGB(**xgb_params_rand)))
     cl3 = ('lgbm' + str(num), make_pipeline(ColumnSelector(cols=tuple(subset)), WrapLGB(**lgb_params_rand)))
     cl4 = ('cb' + str(num), make_pipeline(ColumnSelector(cols=tuple(subset)), WrapCB(**catboost_params_rand)))
-    pipe_models_1.append(cl1)
+    #pipe_models_1.append(cl1)
     pipe_models_1.append(cl2)
     pipe_models_1.append(cl3)
     pipe_models_1.append(cl4)
+pipe_models_1.append(cl1)
 print("Number of level 1 models: ", len(pipe_models_1))
-print("Number of subsets: ", len(subsets))
-print("Subsets: ", subsets)
+#print("Number of subsets: ", len(subsets))
+#print("Subsets: ", subsets)
 
 subset = list(range(0, len(pipe_models_1), 2))
 xgb_params_rand = random.choice(xgbp_list)
@@ -452,7 +454,8 @@ class Rank(BaseEstimator, TransformerMixin):
         return np.apply_along_axis(rankdata, 0, X)
 
 
-stack3 = make_pipeline(Rank(), WrapCB(**catboost_params))
+#stack3 = make_pipeline(Rank(), WrapCB(**catboost_params))
+stack3 = make_pipeline(Rank(), WrapCB(**cbp_list[0]))
 
 steps = [('stack1', stack1),
          ('stack2', stack2),
