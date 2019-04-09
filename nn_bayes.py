@@ -20,7 +20,7 @@ def data():
     This function is separated from create_model() so that hyperopt
     won't reload data for each evaluation run.
     """
-    df_train = pd.read_csv('data/train.csv', index_col=0)[:num_samples]
+    df_train = pd.read_csv('data/train.csv', index_col=0)[:1000]
     y = df_train['target'].values
     x = df_train.iloc[:, df_train.columns != 'target'].values
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
@@ -125,7 +125,6 @@ def create_model(x_train, y_train, x_test, y_test):
 
 if __name__ == '__main__':
     patience_epochs = 50
-    num_samples = 1000
     best_run, best_model = optim.minimize(model=create_model,
                                           data=data,
                                           algo=tpe.suggest,
