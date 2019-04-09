@@ -14,10 +14,12 @@ from sklearn.model_selection import train_test_split
 import keras.backend as K
 from bayes_opt import BayesianOptimization
 from functools import partial
-
+from keras.optimizers import SGD
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import StratifiedKFold
 
 class Logger(callbacks.Callback):
-    def __init__(self, out_path='./', patience=10, lr_patience=3, out_fn='', log_fn=''):
+    def __init__(self, out_path='./', patience=50, lr_patience=10, out_fn='', log_fn='', decay=0.5):
         self.auc = 0
         self.path = out_path
         self.fn = out_fn
@@ -27,8 +29,10 @@ class Logger(callbacks.Callback):
         self.no_improve_lr = 0
         self.losses = []
         self.auc_list = []
+        self.decay = decay
 
     def on_train_begin(self, logs={}):
+        self.auc_list = []
         return
 
     def on_train_end(self, logs={}):
@@ -44,7 +48,7 @@ class Logger(callbacks.Callback):
         return
 
     def on_epoch_end(self, epoch, logs={}):
-        cv_pred = self.model.predict(self.validation_data[0], batch_size=1024)
+        cv_pred = self.model.predict(self.validation_data[0])
         cv_true = self.validation_data[1]
         auc_val = roc_auc_score(cv_true, cv_pred)
         self.auc_list.append(auc_val)
@@ -53,7 +57,7 @@ class Logger(callbacks.Callback):
             self.no_improve_lr = 0
             print("Epoch %s - best AUC: %s" % (epoch, round(auc_val, 4)))
             self.auc = auc_val
-            self.model.save(self.path + self.fn, overwrite=True)
+            #self.model.save(self.path + self.fn, overwrite=True)
         else:
             self.no_improve += 1
             self.no_improve_lr += 1
@@ -62,14 +66,13 @@ class Logger(callbacks.Callback):
                 self.model.stop_training = True
             if self.no_improve_lr >= self.lr_patience:
                 lr = float(K.get_value(self.model.optimizer.lr))
-                K.set_value(self.model.optimizer.lr, 0.75*lr)
-                print("Setting lr to {}".format(0.75*lr))
+                K.set_value(self.model.optimizer.lr, self.decay*lr)
+                print("Setting lr to {}".format(self.decay*lr))
                 self.no_improve_lr = 0
-
         return
 
 
-def get_model():
+def get_model(l1, drop1, l2, drop2):
     """
     Model providing function:
 
@@ -81,57 +84,70 @@ def get_model():
         - model: specify the model just created so that we can later use it again.
     """
     model = Sequential()
-    model.add(Dense(512, input_shape=(200,)))
+    model.add(Dense(int(l1), input_shape=(200,), name="l1"))
     model.add(Activation('relu'))
-    model.add(Dropout({{uniform(0, 1)}}))
-    model.add(Dense({{choice([256, 512, 1024])}}))
-    model.add(Activation({{choice(['relu', 'sigmoid'])}}))
-    model.add(Dropout({{uniform(0, 1)}}))
-    model.add(Dense(1))
+    model.add(Dropout(drop1, name="drop1"))
+    model.add(Dense(int(l2), name="l2"))
+    model.add(Activation('relu'))
+    model.add(Dropout(drop2, name="drop2"))
+    model.add(Dense(1, name="l3"))
     model.add(Activation('sigmoid'))
     return model
 
 
-def fit_with():
+def fit_with(l1, drop1, l2, drop2, momentum, decay, batch_size, lr):
     c = 0
     # Create the model using a specified hyperparameters.
-    model = get_model()
+    model = get_model(l1, drop1, l2, drop2)
 
     # Train the model for a specified number of epochs.
-    logger = Logger(patience=patience_epochs, out_path='./', out_fn='cv_{}.h5'.format(c))
-    model.compile(loss='binary_crossentropy', metrics=['accuracy'],
-                  optimizer={{choice(['rmsprop', 'adam', 'sgd'])}}, callbacks=[logger])
+    logger = Logger(patience=patience_epochs, lr_patience=lr_patience, out_path='./', out_fn='cv_{}.h5'.format(c))
+    optimizer = SGD(lr=lr, decay=decay, momentum=momentum, nesterov=True)
+    model.compile(loss='binary_crossentropy', metrics=['accuracy'], optimizer=optimizer)
+    best_scores = []
+    for train, valid in cv.split(x, y):
+        x_train = x[train][:]
+        y_train = y[train][:]
+        x_valid = x[valid][:]
+        y_valid = y[valid][:]
     # Train the model with the train dataset.
-    history = model.fit(x, y, epochs=1, batch_size=64, validation_split=0.2)
-
+        model.fit(x_train, y_train, epochs=1000, batch_size=int(batch_size), validation_data=[x_valid, y_valid], callbacks=[logger])
+        best_score = max(logger.auc_list)
+        best_scores.append(best_score)
+        logger.auc_list = []
     # Evaluate the model with the eval dataset.
     #score = model.evaluate(eval_ds, steps=10, verbose=0)
     #print('Test loss:', score[0])
     #print('Test accuracy:', score[1])
     # Return the accuracy.
-    best_score = max(history.auc_list)
-    print("Best AUC: ", best_score)
-    return best_score
+    # best_score = max(logger.auc_list)
+    print("AUCs: ", best_scores)
+    print("l1: %d drop1: %d l2: %d drop2: %d momentum: %d decay: %d batch_size: %d lr: %d" % (l1, drop1, l2, drop2, momentum, decay, batch_size, lr))
+    return np.mean(best_scores)
 
 
 if __name__ == '__main__':
-    patience_epochs = 50
-    df_train = pd.read_csv('data/train.csv', index_col=0)[:1000]
+    df_train = pd.read_csv('data/train.csv', index_col=0)[:200000]
     y = df_train['target'].values
     x = df_train.iloc[:, df_train.columns != 'target'].values
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=1)
+    #x = StandardScaler().fit_transform(x)
     # x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
-
+    # l1, act1, drop1, l2, act2, drop2
     # Bounded region of parameter space
-    pbounds = {'dropout2_rate': (0.1, 0.5), 'lr': (1e-4, 1e-2)}
+    patience_epochs = 10
+    lr_patience = 3
+    pbounds = {'l1': (300, 400), 'drop1': (0, 0.5), 'l2': (50, 200), 'drop2': (0, 0.5), 'momentum': (0, 1), 'decay': (0.1, 0.75), 'batch_size': (1, 256), 'lr': (1e-4, 5e-2)}
     fit_with_partial = partial(fit_with)
+    print("Creating optimizer")
     optimizer = BayesianOptimization(
         f=fit_with_partial,
         pbounds=pbounds,
         verbose=2,  # verbose = 1 prints only when a maximum is observed, verbose = 0 is silent
         random_state=1,
     )
-
-    optimizer.maximize(init_points=10, n_iter=10, )
+    print("Optimizing")
+    optimizer.maximize(init_points=10, n_iter=10, acq="ucb")
 
     for i, res in enumerate(optimizer.res):
         print("Iteration {}: \n\t{}".format(i, res))
