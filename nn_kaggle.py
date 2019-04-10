@@ -8,11 +8,12 @@ from keras.models import Sequential, Model
 from keras.layers import Dense, Input, Flatten, Dropout, BatchNormalization, GaussianNoise
 from keras import callbacks
 import keras.backend as K
+from keras.optimizers import SGD
 # LOAD DATA
-df_train = pd.read_csv('./../input/train.csv', index_col=0)
+df_train = pd.read_csv('data/train.csv', index_col=0)
 y_train = df_train.pop('target')
 len_train = len(df_train)
-df_test = pd.read_csv('./../input/test.csv', index_col=0)
+df_test = pd.read_csv('data/test.csv', index_col=0)
 df_all = pd.concat((df_train, df_test), sort=False)
 prev_cols = df_all.columns
 
@@ -27,7 +28,7 @@ cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=7)
 
 # LOGGER
 class Logger(callbacks.Callback):
-    def __init__(self, out_path='./', patience=10, lr_patience=3, out_fn='', log_fn=''):
+    def __init__(self, out_path='./', patience=100, lr_patience=20, out_fn='', log_fn=''):
         self.auc = 0
         self.path = out_path
         self.fn = out_fn
@@ -78,11 +79,15 @@ class Logger(callbacks.Callback):
 # MODEL DEF
 def _Model():
     inp = Input(shape=(200, 1))
-    d1 = Dense(16, activation='relu')(inp)
-    fl = Flatten()(d1)
+    l1 = Dense(128, activation='relu')(inp)
+    d1 = Dropout(0.5)(l1)
+    l2 = Dense(64, activation='relu')(d1)
+    d2 = Dropout(0.2)(l2)
+    fl = Flatten()(d2)
     preds = Dense(1, activation='sigmoid')(fl)
     model = Model(inputs=inp, outputs=preds)
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    sgd = SGD(lr=0.01, momentum=0.9, nesterov=True)
+    model.compile(optimizer=sgd, loss='binary_crossentropy')
     return model
 
 
@@ -97,8 +102,8 @@ for train, valid in cv.split(df_train, y_train):
     X_valid = np.reshape(df_train.iloc[valid].values, (-1, 200, 1))
     y_valid = y_train.iloc[valid].values
     model = _Model()
-    logger = Logger(patience=10, out_path='./', out_fn='cv_{}.h5'.format(c))
-    model.fit(X_train, y_train_, validation_data=(X_valid, y_valid), epochs=100, verbose=2, batch_size=256,
+    logger = Logger(patience=100, out_path='./', out_fn='cv_{}.h5'.format(c))
+    model.fit(X_train, y_train_, validation_data=(X_valid, y_valid), epochs=1000, verbose=2, batch_size=256,
               callbacks=[logger])
     model.load_weights('cv_{}.h5'.format(c))
     X_test = np.reshape(df_test.values, (200000, 200, 1))
@@ -113,6 +118,9 @@ print("CV_AUC: {}".format(auc))
 preds = np.asarray(preds)
 preds = preds.reshape((5, 200000))
 preds_final = np.mean(preds.T, axis=1)
-submission = pd.read_csv('./../input/sample_submission.csv')
+submission = pd.read_csv('data/sample_submission.csv')
 submission['target'] = preds_final
-submission.to_csv('submission.csv', index=False)
+submission.to_csv('final_submission.csv', index=False)
+
+#for layer in model.layers:
+#    print(layer.output_shape)
