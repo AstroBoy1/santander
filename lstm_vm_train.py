@@ -24,12 +24,9 @@ if __name__ == "__main__":
     test_data_x = test_data_df.drop(columns=["ID_code"]).values
 
     model = Sequential()
-    model.add(
-        LSTM(64, input_shape=(200, 1), dropout=0.2, recurrent_dropout=0.2, return_sequences=True, return_state=True))
-    model.add(
-        LSTM(16, input_shape=(200, 1), dropout=0.2, recurrent_dropout=0.2, return_sequences=True, return_state=True))
+    model.add(LSTM(64, input_shape=(200, 1), dropout=0.2, recurrent_dropout=0.2))
     model.add(Dense(1, activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=["accuracy"])
+    model.compile(loss='binary_crossentropy', optimizer='adam')
 
     num_samples = 200000
     x = train_data_x[:num_samples].reshape(num_samples, 200, 1)
@@ -71,7 +68,7 @@ if __name__ == "__main__":
                 self.no_improve_lr = 0
                 print("Epoch %s - best AUC: %s" % (epoch, round(auc_val, 4)))
                 self.auc = auc_val
-                self.model.save(self.path + self.fn, overwrite=True)
+                #self.model.save(self.path + self.fn, overwrite=True)
             else:
                 self.no_improve += 1
                 self.no_improve_lr += 1
@@ -93,20 +90,20 @@ if __name__ == "__main__":
     for train, valid in cv.split(x, y):
         c += 1
         logger = Logger(patience=10, out_path="/", out_fn='cv_{}.h5'.format(c))
-        model.fit(x[train][:], y[train][:], nb_epoch=5, validation_data=(x[valid][:], y[valid][:]), callbacks=[logger])
-        model.load_weights("/" + 'cv_{}.h5'.format(c))
-        X_test = np.reshape(test_data_x, (200000, 200, 1))
-        curr_preds = model.predict(X_test, batch_size=2048)
+        model.fit(x[train][:], y[train][:], nb_epoch=20, validation_data=(x[valid][:], y[valid][:]), callbacks=[logger])
+        #model.load_weights("/" + 'cv_{}.h5'.format(c))
+        #X_test = np.reshape(test_data_x, (200000, 200, 1))
+        preds = model.predict(X_test, batch_size=2048)
         # oof_preds[valid] = model.predict(x[valid])
-        preds.append(curr_preds)
+        #preds.append(curr_preds)
 
     # auc = roc_auc_score(y_train, oof_preds)
     # print("CV_AUC: {}".format(auc))
 
     # SAVE DATA
-    preds = np.asarray(preds)
-    preds = preds.reshape((5, 200000))
-    preds_final = np.mean(preds.T, axis=1)
+    #preds = np.asarray(preds)
+    #preds = preds.reshape((5, 200000))
+    #preds_final = np.mean(preds.T, axis=1)
     submission = pd.read_csv('data/sample_submission.csv')
-    submission['target'] = preds_final
+    submission['target'] = preds
     submission.to_csv('lstm_submission.csv', index=False)
