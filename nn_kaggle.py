@@ -82,8 +82,10 @@ def _Model():
     l1 = Dense(128, activation='relu')(inp)
     d1 = Dropout(0.5)(l1)
     l2 = Dense(64, activation='relu')(d1)
-    d2 = Dropout(0.2)(l2)
-    fl = Flatten()(d2)
+    d2 = Dropout(0.5)(l2)
+    l3 = Dense(16, activation='relu')(d2)
+    d3 = Dropout(0.5)(l3)
+    fl = Flatten()(d3)
     preds = Dense(1, activation='sigmoid')(fl)
     model = Model(inputs=inp, outputs=preds)
     sgd = SGD(lr=0.01, momentum=0.9, nesterov=True)
@@ -111,15 +113,16 @@ for train, valid in cv.split(df_train, y_train):
     oof_preds[valid] = model.predict(X_valid)
     preds.append(curr_preds)
     c += 1
-auc = roc_auc_score(y_train, oof_preds)
-print("CV_AUC: {}".format(auc))
+    break
+#auc = roc_auc_score(y_train, oof_preds)
+#print("CV_AUC: {}".format(auc))
 
 # SAVE DATA
-preds = np.asarray(preds)
-preds = preds.reshape((5, 200000))
-preds_final = np.mean(preds.T, axis=1)
+#preds = np.asarray(preds)
+#preds = preds.reshape((5, 200000))
+#preds_final = np.mean(preds.T, axis=1)
 submission = pd.read_csv('data/sample_submission.csv')
-submission['target'] = preds_final
+submission['target'] = preds[0]
 submission.to_csv('final_submission.csv', index=False)
 
 #for layer in model.layers:
